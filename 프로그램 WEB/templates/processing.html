@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>데이터 가공 자동화</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- SheetJS 라이브러리 추가 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root { --primary-color: #3b82f6; --secondary-color: #64748b; }
+        body { font-family: 'Pretendard', sans-serif; }
+        .step-indicator.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+        .step-indicator.completed { color: #16a34a; }
+        .step { display: none; animation: fadeIn 0.5s ease-in-out; }
+        .step.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .nav-btn { transition: all 0.2s; }
+        .file-label { transition: all 0.2s; }
+        .file-label-success { background-color: #ecfdf5; border-color: #10b981; color: #047857; }
+        .accordion-header.active .accordion-arrow { transform: rotate(180deg); }
+        .accordion-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .listbox-item-mapped { background-color: #f0f9ff !important; color: #0c4a6e; }
+        .btn-secondary { background-color: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; font-weight: 600; padding: 0.5rem 1rem; border-radius: 0.375rem; transition: background-color 0.2s; }
+        .btn-secondary:hover { background-color: #e2e8f0; }
+        .btn-action { background-color: #e0e7ff; color: #4338ca; border-radius: 9999px; width: 2.5rem; height: 2.5rem; font-size: 1rem; }
+        .btn-action:hover { background-color: #c7d2fe; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .listbox {
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            padding: 0.25rem;
+            min-height: 150px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .listbox option { padding: 0.5rem; border-radius: 0.25rem; }
+        .listbox option:checked { background-color: #dbeafe; color: #1e40af; }
+        .listbox option.mapped { background-color: #e0e7ff; color: #3730a3; }
+        .help-icon { color: #9ca3af; cursor: pointer; transition: color 0.2s; }
+        .help-icon:hover { color: #3b82f6; }
+        .preview-container {
+            border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.5rem;
+            margin-top: 0.5rem; max-height: 150px; overflow: auto;
+            font-size: 0.8rem; background-color: #f9fafb;
+        }
+        .preview-container table { width: 100%; }
+        .preview-container th, .preview-container td { padding: 4px 8px; border: 1px solid #d1d5db; white-space: nowrap; }
+        .preview-container th { background-color: #f3f4f6; font-weight: 600; }
+        #alert-modal, #help-modal { display: none; }
+    </style>
+</head>
+<body class="bg-slate-50 flex justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-6xl bg-white rounded-2xl shadow-lg">
+        <!-- Progress Bar -->
+        <div class="p-6 border-b border-slate-200">
+            <div class="flex justify-between text-center">
+                 <div id="indicator-1" class="step-indicator flex-1 pb-2 border-b-4 text-sm font-semibold active">
+                    <i class="fas fa-file-upload mr-2"></i> 1. 파일 선택
+                </div>
+                <div id="indicator-2" class="step-indicator flex-1 pb-2 border-b-4 text-sm font-semibold text-slate-400">
+                    <i class="fas fa-columns mr-2"></i> 2. 열 지정
+                </div>
+                <div id="indicator-3" class="step-indicator flex-1 pb-2 border-b-4 text-sm font-semibold text-slate-400">
+                    <i class="fas fa-cogs mr-2"></i> 3. 규칙 설정
+                </div>
+                <div id="indicator-4" class="step-indicator flex-1 pb-2 border-b-4 text-sm font-semibold text-slate-400">
+                    <i class="fas fa-rocket mr-2"></i> 4. 실행 및 저장
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Content -->
+        <form id="process-form" class="p-8">
+            <!-- Step 1: File Upload -->
+            <div id="step-1" class="step active">
+                <h2 class="text-2xl font-bold text-slate-800 mb-2">시작하기</h2>
+                <p class="text-slate-500 mb-6">데이터 가공에 필요한 파일들을 업로드해주세요.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                           <label class="font-semibold text-slate-700">① 원본 데이터 (필수)</label>
+                           <i class="fas fa-question-circle help-icon" data-help-topic="sourceData"></i>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-2">가공할 주 데이터 파일입니다.</p>
+                        <input type="file" id="sourceFile" name="sourceFile" class="hidden" required accept=".csv, .xlsx, .xls">
+                        <label for="sourceFile" class="flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer hover:bg-slate-50">
+                            <i class="fas fa-cloud-upload-alt mr-3 text-slate-400"></i><span id="sourceFile-name">파일을 선택하거나 드래그하세요</span>
+                        </label>
+                        <div id="sourceFile-preview" class="preview-container hidden"></div>
+                    </div>
+                    <div>
+                         <div class="flex items-center space-x-2">
+                            <label class="font-semibold text-slate-700">② 나라 정리 파일 (필수)</label>
+                             <i class="fas fa-question-circle help-icon" data-help-topic="countryMap"></i>
+                         </div>
+                         <p class="text-xs text-slate-500 mb-2">국가명을 표준화하기 위한 매핑 파일입니다.</p>
+                         <input type="file" id="mappingFile" name="mappingFile" class="hidden" required accept=".csv, .xlsx, .xls">
+                         <label for="mappingFile" class="flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer hover:bg-slate-50">
+                             <i class="fas fa-cloud-upload-alt mr-3 text-slate-400"></i><span id="mappingFile-name">파일을 선택하거나 드래그하세요</span>
+                         </label>
+                         <div id="mappingFile-preview" class="preview-container hidden"></div>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                           <label class="font-semibold text-slate-700">③ DB 파일 (양식) (필수)</label>
+                           <i class="fas fa-question-circle help-icon" data-help-topic="dbTemplate"></i>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-2">최종 결과물의 형식(틀)이 되는 파일입니다.</p>
+                        <input type="file" id="templateFile" name="templateFile" class="hidden" required accept=".csv, .xlsx, .xls">
+                        <label for="templateFile" class="flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer hover:bg-slate-50">
+                            <i class="fas fa-cloud-upload-alt mr-3 text-slate-400"></i><span id="templateFile-name">파일을 선택하거나 드래그하세요</span>
+                        </label>
+                    </div>
+                    <!-- New file input for comment rules -->
+                    <div id="comment-rule-file-container" class="hidden">
+                        <div class="flex items-center space-x-2">
+                           <label class="font-semibold text-slate-700">④ 주석 규칙 파일 (필수)</label>
+                           <i class="fas fa-question-circle help-icon" data-help-topic="commentRuleFile"></i>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-2">'주석 규칙 생성' 도구로 만든 파일입니다.</p>
+                        <input type="file" id="commentRuleFile" name="commentRuleFile" class="hidden" accept=".csv, .xlsx, .xls">
+                        <label for="commentRuleFile" class="flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer hover:bg-slate-50">
+                            <i class="fas fa-cloud-upload-alt mr-3 text-slate-400"></i><span id="commentRuleFile-name">파일을 선택하거나 드래그하세요</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Column Designation -->
+            <div id="step-2" class="step">
+                <div class="flex items-center space-x-2 mb-6">
+                    <h2 class="text-2xl font-bold text-slate-800">데이터 열 지정</h2>
+                    <i class="fas fa-question-circle help-icon" data-help-topic="columnSelect"></i>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <fieldset class="border border-slate-200 p-4 rounded-lg">
+                        <legend class="text-lg font-semibold px-2 text-slate-700">원본 데이터 열</legend>
+                        <div id="source-cols-container" class="space-y-4 pt-2"></div>
+                    </fieldset>
+                    <fieldset class="border border-slate-200 p-4 rounded-lg">
+                        <legend class="text-lg font-semibold px-2 text-slate-700">나라 정리 파일 열</legend>
+                        <div id="map-cols-container" class="space-y-4 pt-2"></div>
+                    </fieldset>
+                </div>
+            </div>
+
+
+            <!-- Step 3: Rules -->
+            <div id="step-3" class="step">
+                 <h2 class="text-2xl font-bold text-slate-800 mb-6">세부 규칙 설정 (선택 사항)</h2>
+                 <div id="accordion-container" class="space-y-2">
+                    <!-- Accordions will be rendered here by JavaScript -->
+                 </div>
+                 <div class="mt-6 pt-4 border-t border-slate-200 flex items-center gap-4">
+                    <button type="button" id="save-settings-btn" class="btn-secondary"><i class="fas fa-save mr-2"></i>현재 설정 저장</button>
+                    <button type="button" id="load-settings-btn" class="btn-secondary"><i class="fas fa-folder-open mr-2"></i>설정 파일 불러오기</button>
+                    <input type="file" id="settings-file-input" class="hidden" accept=".json">
+                </div>
+            </div>
+
+            <!-- Step 4: Run & Save -->
+            <div id="step-4" class="step">
+                <!-- Part 1: Initial view with settings -->
+                <div id="run-settings">
+                    <h2 class="text-2xl font-bold text-slate-800 mb-6">최종 설정 및 실행</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <fieldset class="border border-slate-200 p-4 rounded-lg">
+                            <legend class="text-lg font-semibold px-2 text-slate-700">출처 선택 기준</legend>
+                            <div class="flex flex-col space-y-2 mt-2">
+                                <label for="sourceCriterion" class="font-semibold text-sm text-slate-600">기준 선택</label>
+                                <select id="sourceCriterion" name="sourceCriterion" class="w-full p-2 border border-slate-300 rounded-md">
+                                    <option value="미 지정">미 지정 (기본 자동 선택)</option>
+                                    <option value="단일 대표 출처만 사용">단일 대표 출처만 사용</option>
+                                    <option value="대표 출처 기반 시계열 채우기">대표 출처 기반 시계열 채우기</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col space-y-2 mt-4">
+                                <div class="flex items-center justify-between">
+                                    <label for="manualSource" class="font-semibold text-sm text-slate-600">대표 출처 수동 지정</label>
+                                    <button type="button" id="loadManualSourceBtn" class="text-xs text-blue-500 hover:underline disabled:text-slate-400 disabled:cursor-not-allowed" disabled>후보 불러오기</button>
+                                </div>
+                                <select id="manualSource" name="manualSource" class="w-full p-2 border border-slate-300 rounded-md" disabled>
+                                    <option>('미 지정' 아닐 시 활성화)</option>
+                                </select>
+                            </div>
+                        </fieldset>
+                        <fieldset class="border border-slate-200 p-4 rounded-lg">
+                            <legend class="text-lg font-semibold px-2 text-slate-700">전체 연도 설정 (선택)</legend>
+                            <div class="flex items-center space-x-4 mt-2">
+                                <input type="number" id="startYear" name="startYear" placeholder="시작 연도 (예: 2010)" class="w-full p-2 border border-slate-300 rounded-md">
+                                <span class="text-slate-500">-</span>
+                                <input type="number" id="endYear" name="endYear" placeholder="종료 연도 (예: 2023)" class="w-full p-2 border border-slate-300 rounded-md">
+                            </div>
+                        </fieldset>
+                    </div>
+                    <fieldset class="mt-8 border border-slate-200 p-4 rounded-lg">
+                        <legend class="text-lg font-semibold px-2 text-slate-700">저장 설정</legend>
+                        <div class="flex flex-col space-y-2 mt-2">
+                            <label for="outputFileName" class="font-semibold text-sm text-slate-600">저장할 파일 이름</label>
+                            <input type="text" id="outputFileName" name="outputFileName" value="최종_결과물.xlsx" class="w-full p-2 border border-slate-300 rounded-md">
+                            <p class="text-xs text-slate-500">파일 저장 위치는 브라우저 설정에 따라 결정됩니다. 파일 이름만 지정할 수 있습니다.</p>
+                        </div>
+                    </fieldset>
+                    <div id="status" class="mt-8 text-center p-4 bg-blue-50 text-blue-700 rounded-lg">
+                        <i class="fas fa-info-circle mr-2"></i> 모든 설정을 확인하고 '가공 시작' 버튼을 눌러주세요.
+                    </div>
+                </div>
+
+                <!-- Part 2: Dashboard view, shown after processing -->
+                <div id="result-dashboard" class="hidden">
+                    <h2 class="text-2xl font-bold text-slate-800 mb-6">처리 결과 요약</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <p class="text-sm text-blue-600 font-semibold">총 처리 행</p>
+                            <p id="summary-processed-rows" class="text-2xl font-bold text-blue-800">0</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <p class="text-sm text-green-600 font-semibold">DB 국가 수</p>
+                            <p id="summary-db-countries" class="text-2xl font-bold text-green-800">0</p>
+                        </div>
+                        <div class="bg-yellow-50 p-4 rounded-lg">
+                            <p class="text-sm text-yellow-600 font-semibold">DB에 없는 국가</p>
+                            <p id="summary-extra-countries" class="text-2xl font-bold text-yellow-800">0</p>
+                        </div>
+                        <div class="bg-red-50 p-4 rounded-lg">
+                            <p class="text-sm text-red-600 font-semibold">값 불일치 항목</p>
+                            <p id="summary-discrepancies" class="text-2xl font-bold text-red-800">0</p>
+                        </div>
+                    </div>
+                    <div class="mt-8 text-center">
+                        <p class="text-slate-600 mb-4">데이터 가공이 완료되었습니다. 아래 버튼을 눌러 결과 파일을 다운로드하세요.</p>
+                        <button type="button" id="download-result-btn" class="bg-green-500 text-white font-bold py-3 px-8 rounded-lg hover:bg-green-600 text-lg">
+                            <i class="fas fa-download mr-2"></i> 결과 파일 다운로드
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Navigation Buttons -->
+            <div class="mt-8 pt-6 border-t border-slate-200 flex justify-between items-center">
+                <button type="button" id="prev-btn" class="nav-btn bg-slate-200 text-slate-700 font-bold py-2 px-6 rounded-lg hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed">이전</button>
+                <button type="button" id="next-btn" class="nav-btn bg-blue-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600">다음</button>
+                <button type="submit" id="submit-btn" class="nav-btn bg-green-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-600 hidden">
+                    <i class="fas fa-spinner fa-spin mr-2 hidden"></i><span id="submit-btn-text">가공 시작</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="help-modal-title" class="text-xl font-bold text-slate-800">도움말</h3>
+                <button id="help-modal-close-btn" class="text-slate-500 hover:text-slate-800">&times;</button>
+            </div>
+            <div id="help-modal-content" class="text-slate-600 prose max-w-none"></div>
+        </div>
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
+            <div class="mb-4">
+                <i class="fas fa-exclamation-triangle text-4xl text-yellow-400"></i>
+            </div>
+            <h3 id="alert-message" class="text-lg font-semibold text-slate-800 mb-4"></h3>
+            <button id="alert-close-btn" class="bg-blue-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600">확인</button>
+        </div>
+    </div>
+
+
+<script>
+    // --- Global State ---
+    let currentStep = 1;
+    const totalSteps = 4;
+    const files = {};
+    const columnCache = {};
+    let withComments = false;
+    let resultFile = { data: null, name: null };
+    let rules = {
+        source_hierarchy: {},
+        selected_sources: [],
+        calculation_rules: [],
+        label_map: {}, label_order: [],
+        detail_label_map: {}, detail_label_order: [],
+        sub_detail_label_map: {}, sub_detail_label_order: [],
+        conversion_rules: [],
+        sum_check_rules: [],
+    };
+    const helpContent = {
+        sourceData: `
+            <h4>원본 데이터 파일</h4>
+            <p>가공할 주된 데이터 파일(CSV, XLSX, XLS)을 선택합니다. 데이터가 열(Column) 형식으로 정리되어 있어야 합니다.</p>
+        `,
+        countryMap: `
+            <h4>나라 정리 파일</h4>
+            <p>'국가명 매칭 분석기'를 통해 생성된 나라 정리 파일을 선택합니다. 이 파일을 기준으로 원본 데이터의 국가명이 표준화됩니다.</p>
+        `,
+        dbTemplate: `
+            <h4>DB 파일 (양식)</h4>
+            <p>최종 결과물의 기준이 될 엑셀 파일을 선택합니다. 통계 DB 관리 시스템에서 '시계열표(표두)' 형식으로 다운로드한 파일이어야 합니다.</p>
+        `,
+        commentRuleFile: `
+            <h4>주석 규칙 파일</h4>
+            <p>'주석 규칙 생성' 메뉴를 통해 미리 만들어 둔 '주석_규칙_파일.xlsx'를 선택합니다. 이 파일의 규칙에 따라 주석이 자동으로 처리됩니다.</p>
+        `,
+        columnSelect: `
+            <h4>데이터 열 지정</h4>
+            <p>업로드한 '원본 데이터'와 '나라 정리 파일'에서 프로그램이 사용할 데이터가 어떤 열에 있는지 지정해주어야 합니다.</p>
+            <ul>
+                <li><strong>국가명, 연도, 값 열:</strong> 데이터의 핵심 요소를 지정합니다. (필수)</li>
+                <li class="comment-mode-help hidden"><strong>지표/출처 주석열:</strong> 주석 처리에 사용할 원본 주석이 담긴 열을 지정합니다. (주석 처리 시 필수)</li>
+                <li><strong>주요/세부 구분 열:</strong> 데이터의 카테고리를 지정합니다. (예: 보험 종류 - 생명보험, 손해보험)</li>
+                <li><strong>출처 열:</strong> 데이터의 출처가 담긴 열을 지정하면, 최종 결과물에 출처 정보가 함께 정리됩니다.</li>
+            </ul>
+        `,
+        sourceSelection: `
+            <h4>출처 선택</h4>
+            <p>선택한 '출처' 열의 값들을 기준으로 분석에 사용할 출처를 지정합니다. '출처 목록 불러오기'를 누르면 원본 데이터의 출처 그룹이 왼쪽에 표시됩니다. 그룹을 선택하고 화살표 버튼을 눌러 오른쪽에 추가하면, 해당 그룹에 속한 출처의 데이터만 최종 분석에 사용됩니다.</p>
+        `,
+        calculationRules: `
+            <h4>항목 간 연산 규칙</h4>
+            <p>데이터의 특정 항목들 간의 사칙연산을 통해 새로운 항목을 만들 수 있습니다. 예를 들어 '총계' 항목과 '인구' 항목을 나누어 '1인당 값'이라는 새 항목을 생성할 수 있습니다. '연산 항목 불러오기'로 기준이 될 항목들을 불러온 뒤 규칙을 설정하세요.</p>
+        `,
+        itemMapping: `
+            <h4>항목 매핑</h4>
+            <p>원본 데이터의 '주요/세부 구분' 항목들을 최종 DB 양식의 항목들과 연결(매핑)합니다. 왼쪽 목록에서 원본 항목을, 가운데 목록에서 DB 항목을 선택하고 '선택 항목 연결'을 누르세요. 가운데 목록의 순서를 조절하여 최종 결과 파일의 행 순서를 결정할 수 있습니다.</p>
+        `,
+        unitConversion: `
+            <h4>단위 변환 규칙</h4>
+            <p>특정 항목의 단위를 일괄적으로 변환하는 규칙입니다. 예를 들어, '달러' 단위를 '천 달러'로 바꾸고 싶을 때, 해당 항목을 선택하고 '나누기'와 값 '1000'을 입력하여 규칙을 추가할 수 있습니다.</p>
+        `,
+        sumCheck: `
+            <h4>합계 검증 규칙</h4>
+            <p>여러 항목의 합이 특정 '합계' 항목과 일치하는지 검증하는 규칙을 설정합니다. 최종 결과물의 '비고' 시트에서 검증 결과를 확인할 수 있어 데이터 정합성을 높이는 데 도움이 됩니다.</p>
+        `
+    };
+
+    // --- DOM Elements ---
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const submitBtn = document.getElementById('submit-btn');
+    const alertModal = document.getElementById('alert-modal');
+    const alertMessage = document.getElementById('alert-message');
+    const alertCloseBtn = document.getElementById('alert-close-btn');
+    const helpModal = document.getElementById('help-modal');
+
+    // --- Column Definitions ---
+    const sourceColsDefWithComments = [
+        { id: 'name', label: '국가명', required: true },
+        { id: 'time', label: '연도', required: true },
+        { id: 'value', label: '값', required: true },
+        { id: 'indicator_note', label: '지표 주석', required: true },
+        { id: 'source_note', label: '출처 주석', required: true },
+        { id: 'source_col', label: '출처', required: false },
+        { id: 'label', label: '주요 구분', required: false },
+        { id: 'detail_label', label: '세부 구분', required: false },
+        { id: 'sub_detail_label', label: '추가 세부 구분', required: false },
+    ];
+    const sourceColsDefWithoutComments = [
+        { id: 'name', label: '국가명', required: true },
+        { id: 'time', label: '연도', required: true },
+        { id: 'value', label: '값', required: true },
+        { id: 'source_col', label: '출처', required: true },
+        { id: 'label', label: '주요 구분', required: false },
+        { id: 'detail_label', label: '세부 구분', required: false },
+        { id: 'sub_detail_label', label: '추가 세부 구분', required: false },
+        { id: 'na_check', label: 'N/A 확인용', required: false },
+    ];
+    let sourceColsDef = sourceColsDefWithoutComments; // Default
+
+    const mapColsDef = [
+        { id: 'source_name', label: '원본 국가명', required: true },
+        { id: 'target_name', label: '바꿀 국가명', required: true },
+    ];
+
+    // --- Helper & Modal Functions ---
+    function showAlert(message) {
+        alertMessage.textContent = message;
+        alertModal.style.display = 'flex';
+    }
+    alertCloseBtn.addEventListener('click', () => {
+        alertModal.style.display = 'none';
+    });
+    
+    function showHelpModal(title, content) {
+        if(helpModal) {
+            document.getElementById('help-modal-title').textContent = title;
+            document.getElementById('help-modal-content').innerHTML = content;
+            helpModal.style.display = 'flex';
+        }
+    }
+    if (helpModal) {
+        document.getElementById('help-modal-close-btn').addEventListener('click', () => {
+            helpModal.style.display = 'none';
+        });
+        helpModal.addEventListener('click', (e) => { 
+            if (e.target === helpModal) helpModal.style.display = 'none'; 
+        });
+    }
+
+    function setupHelpIcons(selector) {
+         document.querySelectorAll(selector).forEach(icon => {
+            icon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const topic = icon.getAttribute('data-help-topic');
+                const titleEl = icon.previousElementSibling;
+                const title = titleEl ? titleEl.textContent : '도움말';
+                if (helpContent[topic]) {
+                    showHelpModal(title, helpContent[topic]);
+                }
+            });
+        });
+    }
+
+    // --- Wizard Navigation & Control ---
+    function updateWizard() {
+        document.querySelectorAll('.step-indicator').forEach((el, i) => {
+            el.classList.remove('active', 'completed', 'text-slate-400');
+            if (i + 1 < currentStep) {
+                el.classList.add('completed');
+            } else if (i + 1 === currentStep) {
+                el.classList.add('active');
+            } else {
+                el.classList.add('text-slate-400');
+            }
+        });
+        document.querySelectorAll('.step').forEach((el, i) => el.classList.toggle('active', i + 1 === currentStep));
+        prevBtn.disabled = currentStep === 1;
+        nextBtn.style.display = currentStep === totalSteps ? 'none' : 'inline-block';
+        submitBtn.style.display = currentStep === totalSteps ? 'inline-block' : 'none';
+    }
+
+    nextBtn.addEventListener('click', async () => {
+        nextBtn.disabled = true;
+        nextBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        if (await validateStep(currentStep)) {
+            if (currentStep < totalSteps) {
+                currentStep++;
+                await prepareStep(currentStep);
+                updateWizard();
+            }
+        }
+        nextBtn.disabled = false;
+        nextBtn.innerHTML = '다음';
+    });
+    
+    prevBtn.addEventListener('click', () => {
+        if (currentStep > 1) { 
+            if (currentStep === 4) {
+                 document.getElementById('run-settings').classList.remove('hidden');
+                 document.getElementById('result-dashboard').classList.add('hidden');
+            }
+            currentStep--; 
+            updateWizard(); 
+        }
+    });
+
+    async function validateStep(step) {
+        if (step === 1) {
+            if (!files.sourceFile || !files.mappingFile || !files.templateFile) {
+                showAlert('필수 파일(원본, 나라 정리, DB 양식)을 모두 업로드해야 합니다.');
+                return false;
+            }
+            if (withComments && !files.commentRuleFile) {
+                showAlert("'주석 처리 포함' 모드에서는 '주석 규칙 파일'이 필수입니다.");
+                return false;
+            }
+        }
+        if (step === 2) {
+             const requiredDefs = [...sourceColsDef.filter(d => d.required), ...mapColsDef.filter(d => d.required)];
+             for (const colDef of requiredDefs) {
+                 const select = document.getElementById(colDef.id);
+                 if (!select || !select.value) {
+                     showAlert(`필수 열인 '${colDef.label}'을(를) 선택해주세요.`);
+                     return false;
+                 }
+             }
+        }
+        return true;
+    }
+
+    async function prepareStep(step) {
+        if (step === 2) {
+            await populateColumnSelectors();
+            setupHelpIcons('#step-2 .help-icon');
+        }
+        if (step === 3) initializeAllAccordions();
+        if (step === 4) {
+            // Add event listener for source criterion dropdown
+            const sourceCriterionSelect = document.getElementById('sourceCriterion');
+            if (sourceCriterionSelect) {
+                sourceCriterionSelect.addEventListener('change', handleCriterionChange);
+                handleCriterionChange(); // Initial check
+            }
+            const loadManualSourceBtn = document.getElementById('loadManualSourceBtn');
+            if(loadManualSourceBtn){
+                loadManualSourceBtn.addEventListener('click', populateManualSourceCandidates);
+            }
+        }
+    }
+    
+    function setupFileInput(id) {
+        const input = document.getElementById(id);
+        if (!input) return;
+        
+        const handleFile = (file) => {
+            const nameLabel = document.getElementById(`${id}-name`);
+            const fileLabel = nameLabel.parentElement;
+            if (file) {
+                files[id] = file;
+                nameLabel.textContent = file.name;
+                fileLabel.classList.add('file-label-success');
+                 if (id === 'sourceFile' || id === 'mappingFile') {
+                    renderPreview(file, `${id}-preview`);
+                }
+            } else {
+                delete files[id];
+                nameLabel.textContent = '파일을 선택하거나 드래그하세요';
+                fileLabel.classList.remove('file-label-success');
+                const preview = document.getElementById(`${id}-preview`);
+                if(preview) preview.classList.add('hidden');
+            }
+        };
+
+        input.addEventListener('change', e => handleFile(e.target.files[0]));
+        
+        const dropZone = input.nextElementSibling;
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); });
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            if (e.dataTransfer.files.length) {
+                input.files = e.dataTransfer.files;
+                handleFile(input.files[0]);
+            }
+        });
+    }
+
+    async function getColumns(file, endpoint = '/get_columns') {
+        if (!file) return [];
+        const cacheKey = file.name + file.lastModified;
+        if (columnCache[cacheKey]) return columnCache[cacheKey];
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const response = await fetch(endpoint, { method: 'POST', body: formData });
+            if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+            columnCache[cacheKey] = data.columns;
+            return data.columns;
+        } catch (error) {
+            showAlert(`열 정보를 불러오는 데 실패했습니다: ${error.message}`);
+            return [];
+        }
+    }
+    
+    function createColumnSelector(container, colDef, columns) {
+        const { id, label, required } = colDef;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'grid grid-cols-[auto_1fr] items-center gap-2';
+        const labelEl = document.createElement('label');
+        labelEl.htmlFor = id;
+        labelEl.className = 'text-sm font-medium text-slate-600 justify-self-end text-right pr-2';
+        labelEl.textContent = `${label}${required ? '' : ' (선택)'}:`;
+        
+        const selectEl = document.createElement('select');
+        selectEl.id = id;
+        selectEl.name = id;
+        selectEl.className = 'w-full p-2 border border-slate-300 rounded-md';
+        
+        let options = [...columns];
+        if (!required) {
+             selectEl.innerHTML = '<option value="없음">없음</option>';
+        } else {
+             selectEl.innerHTML = '<option value="">선택하세요</option>';
+        }
+        
+        options.forEach(col => {
+            const option = document.createElement('option');
+            option.value = col;
+            option.textContent = col;
+            selectEl.appendChild(option);
+        });
+
+        if (!required) selectEl.value = '없음';
+        
+        wrapper.appendChild(labelEl);
+        wrapper.appendChild(selectEl);
+        container.appendChild(wrapper);
+    }
+
+    async function populateColumnSelectors() {
+        const sourceColsContainer = document.getElementById('source-cols-container');
+        const mapColsContainer = document.getElementById('map-cols-container');
+        sourceColsContainer.innerHTML = '<div class="text-center text-slate-500">열 정보 로딩 중...</div>';
+        mapColsContainer.innerHTML = '<div class="text-center text-slate-500">열 정보 로딩 중...</div>';
+        
+        const [sourceColumns, mapColumns] = await Promise.all([
+            getColumns(files.sourceFile),
+            getColumns(files.mappingFile)
+        ]);
+
+        sourceColsContainer.innerHTML = '';
+        mapColsContainer.innerHTML = '';
+        
+        sourceColsDef.forEach(def => createColumnSelector(sourceColsContainer, def, sourceColumns));
+        mapColsDef.forEach(def => createColumnSelector(mapColsContainer, def, mapColumns));
+    }
+    
+    function renderPreview(file, previewContainerId) {
+        const reader = new FileReader();
+        const previewContainer = document.getElementById(previewContainerId);
+        if (!previewContainer) return;
+        previewContainer.innerHTML = '미리보기 로딩 중...';
+        previewContainer.classList.remove('hidden');
+
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+
+                if (json.length === 0) {
+                    previewContainer.innerHTML = '파일에 데이터가 없습니다.';
+                    return;
+                }
+
+                let table = '<table><thead><tr>';
+                json[0].forEach(cell => table += `<th>${cell}</th>`);
+                table += '</tr></thead><tbody>';
+                for (let i = 1; i < Math.min(json.length, 4); i++) {
+                    table += '<tr>';
+                    json[i].forEach(cell => table += `<td>${cell || ''}</td>`);
+                    table += '</tr>';
+                }
+                table += '</tbody></table>';
+                previewContainer.innerHTML = table;
+            } catch (err) {
+                previewContainer.innerHTML = '<span class="text-red-500">미리보기를 생성할 수 없습니다.</span>';
+                console.error("Preview Error:", err);
+            }
+        };
+        reader.onerror = function() {
+            previewContainer.innerHTML = '<span class="text-red-500">파일 읽기 오류.</span>';
+        };
+        reader.readAsArrayBuffer(file);
+    }
+    
+    // --- Accordion UI & Logic (Step 3) ---
+    function initializeAllAccordions() {
+        const container = document.getElementById('accordion-container');
+        container.innerHTML = `
+            <div id="source-accordion" class="border border-slate-200 rounded-lg"></div>
+            <div id="calc-accordion" class="border border-slate-200 rounded-lg"></div>
+            <div id="map-main-accordion" class="border border-slate-200 rounded-lg"></div>
+            <div id="map-detail-accordion" class="border border-slate-200 rounded-lg"></div>
+            <div id="map-subdetail-accordion" class="border border-slate-200 rounded-lg"></div>
+            <div id="conv-accordion" class="border border-slate-200 rounded-lg"></div>
+            <div id="sum-check-accordion" class="border border-slate-200 rounded-lg"></div>
+        `;
+
+        renderAccordion('source-accordion', '출처 선택', renderSourceSelection(), 'sourceSelection');
+        renderAccordion('calc-accordion', '항목 간 연산 규칙 설정', renderCalculationRules(), 'calculationRules');
+        renderAccordion('map-main-accordion', '주요 구분 항목 매핑', renderMappingSection('main', 'label', 'label_map', 'label_order', 1), 'itemMapping');
+        renderAccordion('map-detail-accordion', '세부 구분 항목 매핑', renderMappingSection('detail', 'detail_label', 'detail_label_map', 'detail_label_order', 2), 'itemMapping');
+        renderAccordion('map-subdetail-accordion', '추가 세부 구분 항목 매핑', renderMappingSection('subdetail', 'sub_detail_label', 'sub_detail_label_map', 'sub_detail_label_order', 3), 'itemMapping');
+        renderAccordion('conv-accordion', '단위 변환 규칙 설정', renderConversionRules(), 'unitConversion');
+        renderAccordion('sum-check-accordion', '합계 검증 규칙 설정', renderSumCheckRules(), 'sumCheck');
+        
+        document.querySelectorAll('.accordion-header').forEach(button => {
+             button.addEventListener('click', () => {
+                 const body = button.nextElementSibling;
+                 button.classList.toggle('active');
+                 if (body.style.maxHeight) {
+                    body.style.maxHeight = null;
+                 } else {
+                    body.style.maxHeight = body.scrollHeight + "px";
+                 }
+             });
+        });
+        
+        setupHelpIcons('#step-3 .help-icon');
+    }
+
+    function renderAccordion(containerId, title, contentHtml, helpTopic = null) {
+        const container = document.getElementById(containerId);
+        if(!container) return;
+        
+        const helpIconHtml = helpTopic 
+            ? `<i class="fas fa-question-circle help-icon ml-2" data-help-topic="${helpTopic}"></i>`
+            : '';
+
+        container.innerHTML = `
+            <button type="button" class="accordion-header w-full flex justify-between items-center p-4 cursor-pointer hover:bg-slate-50">
+                <div class="flex items-center">
+                    <span class="font-semibold text-slate-700">${title}</span>
+                    ${helpIconHtml}
+                </div>
+                <i class="fas fa-chevron-down accordion-arrow transition-transform"></i>
+            </button>
+            <div class="accordion-body bg-slate-50/50"><div class="p-4">${contentHtml}</div></div>`;
+    }
+    
+    function populateListbox(listbox, items, selectedItems = []) {
+        if(!listbox) return;
+        listbox.innerHTML = '';
+        items.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item;
+            option.textContent = item;
+            if (selectedItems.includes(item)) {
+                option.selected = true;
+            }
+            listbox.appendChild(option);
+        });
+    }
+
+    async function getUniqueValues(file, column, isIndex = false) {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (isIndex) {
+            formData.append('columnIndex', column);
+        } else {
+            const colLetter = document.getElementById(column)?.value;
+            if(!colLetter || colLetter === '없음') return [];
+            formData.append('column', colLetter);
+        }
+
+        try {
+            const res = await fetch('/get_unique_values', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            return data.values;
+        } catch(err) {
+            showAlert(`고유값 로딩 실패: ${err.message}`);
+            return [];
+        }
+    }
+    
+    function renderSourceSelection() {
+        const content = `
+            <button type="button" id="load-sources-btn" class="btn-secondary mb-4">출처 목록 불러오기</button>
+            <div class="grid grid-cols-1 md:grid-cols-[2fr_1fr_2fr] gap-4 items-start">
+                <div>
+                    <label class="font-semibold text-sm">전체 출처 그룹</label>
+                    <select id="source-groups-listbox" class="listbox w-full mt-1 custom-scrollbar" size="8"></select>
+                </div>
+                <div class="flex flex-col gap-2 items-center justify-center h-full pt-6">
+                    <button type="button" id="add-group-btn" title="그룹 전체 추가" class="btn-action">&rarr;</button>
+                    <button type="button" id="remove-source-btn" title="선택 항목 제거" class="btn-action">&larr;</button>
+                </div>
+                <div>
+                    <label class="font-semibold text-sm">선택된 출처 (분석에 사용)</label>
+                    <select id="selected-sources-listbox" multiple class="listbox w-full mt-1 custom-scrollbar" size="8"></select>
+                </div>
+            </div>
+        `;
+        // Instead of calling renderAccordion here, we return the HTML and set up events after injection
+        setTimeout(() => {
+             document.getElementById('load-sources-btn').addEventListener('click', async (e) => {
+                const btn = e.target;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 로딩 중...';
+                
+                const sourceCol = document.getElementById('source_col')?.value;
+                if(!sourceCol || sourceCol === '없음') {
+                    showAlert('2단계에서 출처 열을 먼저 지정해야 합니다.');
+                    btn.disabled = false;
+                    btn.innerHTML = '출처 목록 불러오기';
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('file', files.sourceFile);
+                formData.append('column', sourceCol);
+
+                try {
+                    const res = await fetch('/get_source_hierarchy', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if(data.error) throw new Error(data.error);
+
+                    rules.source_hierarchy = data.hierarchy;
+                    const groupsListbox = document.getElementById('source-groups-listbox');
+                    populateListbox(groupsListbox, Object.keys(data.hierarchy).sort());
+                    
+                } catch(err) {
+                    showAlert(`출처 로딩 실패: ${err.message}`);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '출처 목록 불러오기';
+                }
+            });
+
+            document.getElementById('add-group-btn').addEventListener('click', () => {
+                const groupsListbox = document.getElementById('source-groups-listbox');
+                const selectedGroup = groupsListbox.value;
+                if (!selectedGroup) return;
+
+                const sourcesToAdd = rules.source_hierarchy[selectedGroup] || [];
+                const selectedListbox = document.getElementById('selected-sources-listbox');
+                const currentSelected = new Set(Array.from(selectedListbox.options).map(o => o.value));
+
+                sourcesToAdd.forEach(source => {
+                    if (!currentSelected.has(source)) {
+                        const option = document.createElement('option');
+                        option.value = source;
+                        option.textContent = source;
+                        selectedListbox.appendChild(option);
+                    }
+                });
+            });
+
+            document.getElementById('remove-source-btn').addEventListener('click', () => {
+                const selectedListbox = document.getElementById('selected-sources-listbox');
+                Array.from(selectedListbox.selectedOptions).forEach(option => option.remove());
+            });
+        }, 0);
+        return content;
+    }
+
+    function renderCalculationRules() {
+   const content = `
+    <div class="space-y-4">
+        <div class="flex items-center gap-4">
+            <button type="button" id="load-calc-items-btn" class="btn-secondary">연산 항목 불러오기</button>
+        </div>
+
+        <div>
+            <label for="calc-new-item" class="text-sm font-medium">새 항목 이름</label>
+            <input type="text" id="calc-new-item" class="w-full p-2 border border-slate-300 rounded-md mt-1">
+        </div>
+
+        <div class="p-3 border border-slate-200 rounded-lg bg-slate-50/50">
+            <label class="text-sm font-medium mb-2 block">공식 만들기
+                <span class="text-xs text-slate-500 font-normal"> - 항목 불러오기 후, [+] 버튼으로 연산을 추가하세요.</span>
+            </label>
+            <div id="calc-formula-container" class="space-y-2 custom-scrollbar" style="max-height: 150px; overflow-y: auto; padding: 0.5rem;">
+                </div>
+            <button type="button" id="add-operation-btn" class="btn-secondary text-xs mt-2 p-1 h-auto disabled:opacity-50" disabled>
+                <i class="fas fa-plus mr-1"></i> 연산 추가
+            </button>
+        </div>
+
+        <div class="text-right pt-2">
+            <button type="button" id="add-calc-rule-btn" class="bg-blue-500 text-white font-semibold h-10 px-6 rounded-lg hover:bg-blue-600">규칙 추가</button>
+        </div>
+
+        <div class="grid grid-cols-[1fr_auto] gap-4 pt-4 border-t">
+            <div>
+                <label class="font-semibold text-sm">설정된 연산 규칙</label>
+                <select id="calc-rules-listbox" class="listbox w-full mt-1 custom-scrollbar"></select>
+            </div>
+            <button type="button" id="del-calc-rule-btn" class="btn-secondary self-end !bg-red-100 !text-red-700">선택 삭제</button>
+        </div>
+    </div>
+   `;
+       
+        // ▼▼▼ 동적 UI를 제어하기 위한 전체 로직 ▼▼▼
+        setTimeout(() => {
+            let availableCalcItems = [];
+            const formulaContainer = document.getElementById('calc-formula-container');
+            const addOperationBtn = document.getElementById('add-operation-btn');
+
+            // 연산 한 줄(연산자 + 항목)을 추가하는 함수
+            const addOperation = () => {
+                const operationId = Date.now(); // 각 줄을 식별할 고유 ID
+                const operationDiv = document.createElement('div');
+                operationDiv.className = 'flex items-center gap-2';
+                operationDiv.dataset.id = operationId;
+
+                let opSelect = '<select class="w-16 p-1 border border-slate-300 rounded-md h-8 text-center">';
+                ['+', '-', '*', '/'].forEach(op => opSelect += `<option value="${op}">${op}</option>`);
+                opSelect += '</select>';
+
+                let itemSelect = '<select class="flex-1 p-1 border border-slate-300 rounded-md h-8">';
+                availableCalcItems.forEach(item => itemSelect += `<option value="${item}">${item}</option>`);
+                itemSelect += '</select>';
+                
+                operationDiv.innerHTML = `
+                    ${opSelect}
+                    ${itemSelect}
+                    <button type="button" class="text-red-500 hover:text-red-700 remove-op-btn">&times;</button>
+                `;
+                formulaContainer.appendChild(operationDiv);
+            };
+
+            // 첫 항목을 추가하는 함수
+            const addFirstItem = () => {
+                formulaContainer.innerHTML = '';
+                const firstItemDiv = document.createElement('div');
+                let itemSelect = '<select class="w-full p-1 border border-slate-300 rounded-md h-8">';
+                availableCalcItems.forEach(item => itemSelect += `<option value="${item}">${item}</option>`);
+                itemSelect += '</select>';
+                firstItemDiv.innerHTML = itemSelect;
+                formulaContainer.appendChild(firstItemDiv);
+            };
+
+            // '연산 항목 불러오기' 버튼
+            document.getElementById('load-calc-items-btn').addEventListener('click', async (e) => {
+                const btn = e.target;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 로딩 중...';
+                availableCalcItems = await getUniqueValues(files.sourceFile, 'label');
+                if (availableCalcItems.length > 0) {
+                    addFirstItem();
+                    addOperationBtn.disabled = false;
+                } else {
+                    showAlert('2단계에서 주요 구분 열을 선택해야 항목을 불러올 수 있습니다.');
+                    formulaContainer.innerHTML = '';
+                    addOperationBtn.disabled = true;
+                }
+                btn.disabled = false;
+                btn.innerHTML = '연산 항목 불러오기';
+            });
+            
+            // '[+] 연산 추가' 버튼
+            addOperationBtn.addEventListener('click', addOperation);
+
+            // 'X' 삭제 버튼 (이벤트 위임)
+            formulaContainer.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-op-btn')) {
+                    e.target.parentElement.remove();
+                }
+            });
+
+            // '규칙 추가' 버튼
+            document.getElementById('add-calc-rule-btn').addEventListener('click', () => {
+                const newItemEl = document.getElementById('calc-new-item');
+                const rulesListboxEl = document.getElementById('calc-rules-listbox');
+                const newItemName = newItemEl.value.trim();
+
+                if (!newItemName) {
+                    showAlert('새 항목 이름을 입력해주세요.');
+                    return;
+                }
+
+                const formulaChain = [];
+                const formulaParts = formulaContainer.children;
+                if (formulaParts.length === 0) {
+                    showAlert('연산할 항목이 없습니다.');
+                    return;
+                }
+
+                // 공식 체인 만들기
+                let displayString = '';
+                for (let i = 0; i < formulaParts.length; i++) {
+                    const selects = formulaParts[i].querySelectorAll('select');
+                    formulaChain.push(selects[0].value);
+                    displayString += selects[0].value;
+                    if (selects.length > 1) {
+                         formulaChain.push(selects[1].value);
+                         displayString += ` ${selects[0].value} ${selects[1].value}`;
+                    }
+                }
+                
+                const newRule = { newItem: newItemName, chain: formulaChain };
+                rules.calculation_rules.push(newRule);
+
+                const option = document.createElement('option');
+                option.textContent = `${newItemName} = ${formulaChain.join(' ')}`;
+                rulesListboxEl.appendChild(option);
+
+                // 입력 필드 초기화
+                newItemEl.value = '';
+                addFirstItem();
+            });
+
+            // '선택 삭제' 버튼
+            document.getElementById('del-calc-rule-btn').addEventListener('click', () => {
+                const listboxEl = document.getElementById('calc-rules-listbox');
+                const selectedIndex = listboxEl.selectedIndex;
+                if (selectedIndex > -1) {
+                    rules.calculation_rules.splice(selectedIndex, 1);
+                    listboxEl.remove(selectedIndex);
+                } else {
+                    showAlert('삭제할 규칙을 선택해주세요.');
+                }
+            });
+
+       }, 0);
+       return content;
+    }
+    
+    function renderMappingSection(type, colKey, mapKey, orderKey, templateColIndex) {
+        const content = `
+        <div class="space-y-4">
+            <div class="flex flex-wrap gap-2">
+                 <button type="button" id="load-map-${type}-btn" class="btn-secondary">항목 목록 불러오기</button>
+                 <button type="button" id="map-${type}-btn" class="btn-secondary">선택 항목 연결</button>
+                 <button type="button" id="add-as-is-map-${type}-btn" class="btn-secondary">선택 항목 그대로 추가</button>
+                 <button type="button" id="reset-map-${type}-btn" class="btn-secondary !bg-red-100 !text-red-700">매핑 초기화</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="font-semibold text-sm">원본/계산 항목</label>
+                    <select id="source-${type}-listbox" multiple class="listbox w-full mt-1 custom-scrollbar"></select>
+                </div>
+                <div>
+                    <label class="font-semibold text-sm">DB 양식 항목 (순서 지정)</label>
+                    <select id="template-${type}-listbox" class="listbox w-full mt-1 custom-scrollbar"></select>
+                     <div class="flex gap-2 mt-2">
+                        <button type="button" id="move-up-${type}-btn" class="btn-secondary flex-1">▲</button>
+                        <button type="button" id="move-down-${type}-btn" class="btn-secondary flex-1">▼</button>
+                    </div>
+                </div>
+                 <div>
+                    <label class="font-semibold text-sm">매핑 결과</label>
+                    <div id="display-map-${type}" class="listbox w-full mt-1 custom-scrollbar bg-slate-50 p-2 overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+        `;
+        
+        setTimeout(() => {
+            const updateMappingDisplay = () => {
+                const display = document.getElementById(`display-map-${type}`);
+                const mapping = rules[mapKey];
+                const order = rules[orderKey];
+                display.innerHTML = '';
+
+                const groupedMappings = {};
+                for (const [source, target] of Object.entries(mapping)) {
+                    if (!groupedMappings[target]) groupedMappings[target] = [];
+                    groupedMappings[target].push(source);
+                }
+
+                order.forEach(target => {
+                    if (groupedMappings[target]) {
+                        const sources = groupedMappings[target].join(', ');
+                        display.innerHTML += `<div><strong>[${sources}]</strong> &rarr; ${target}</div>`;
+                    }
+                });
+                const sourceListbox = document.getElementById(`source-${type}-listbox`);
+                Array.from(sourceListbox.options).forEach(opt => {
+                    opt.classList.toggle('mapped', mapping.hasOwnProperty(opt.value));
+                });
+            };
+
+            document.getElementById(`load-map-${type}-btn`).addEventListener('click', async (e) => {
+                const btn = e.target;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 로딩 중...';
+
+                // 1. 원본 파일에서 항목 목록을 가져옵니다.
+                const sourceItemsFromFile = await getUniqueValues(files.sourceFile, colKey);
+
+                // 2. '항목 간 연산 규칙'에서 사용자가 만든 새 항목 이름들을 가져옵니다.
+                const calculatedItems = rules.calculation_rules.map(rule => rule.newItem);
+
+                // 3. 두 목록을 합치고, 중복을 제거한 뒤, 알파벳 순으로 정렬합니다.
+                const allSourceItems = [...new Set([...sourceItemsFromFile, ...calculatedItems])].sort();
+
+                // DB 양식 파일에서 항목을 가져오는 부분은 동일합니다.
+                const templateItems = await getUniqueValues(files.templateFile, templateColIndex, true);
+
+                const sourceListbox = document.getElementById(`source-${type}-listbox`);
+                const templateListbox = document.getElementById(`template-${type}-listbox`);
+
+                // 4. 합쳐진 전체 항목 목록을 화면에 표시합니다.
+                populateListbox(sourceListbox, allSourceItems);
+                populateListbox(templateListbox, templateItems);
+
+                rules[orderKey] = [...templateItems];
+                updateMappingDisplay();
+
+                btn.disabled = false;
+                btn.innerHTML = '항목 목록 불러오기';
+            });
+
+            document.getElementById(`map-${type}-btn`).addEventListener('click', () => {
+                const sourceListbox = document.getElementById(`source-${type}-listbox`);
+                const templateListbox = document.getElementById(`template-${type}-listbox`);
+                
+                const selectedSources = Array.from(sourceListbox.selectedOptions).map(opt => opt.value);
+                const selectedTemplate = templateListbox.value;
+
+                if (selectedSources.length === 0 || !selectedTemplate) {
+                    showAlert('왼쪽에서 하나 이상의 원본 항목을, 오른쪽에서 하나의 DB 항목을 선택하세요.');
+                    return;
+                }
+
+                selectedSources.forEach(source => {
+                    rules[mapKey][source] = selectedTemplate;
+                });
+                updateMappingDisplay();
+            });
+
+            document.getElementById(`add-as-is-map-${type}-btn`).addEventListener('click', () => {
+                const sourceListbox = document.getElementById(`source-${type}-listbox`);
+                const selectedSources = Array.from(sourceListbox.selectedOptions).map(opt => opt.value);
+
+                if (selectedSources.length === 0) {
+                    showAlert('왼쪽 원본/계산 항목 목록에서 하나 이상을 선택하세요.');
+                    return;
+                }
+                
+                selectedSources.forEach(source => {
+                    rules[mapKey][source] = source;
+                    if (!rules[orderKey].includes(source)) {
+                        rules[orderKey].push(source);
+                    }
+                });
+                updateMappingDisplay();
+            });
+
+            document.getElementById(`reset-map-${type}-btn`).addEventListener('click', () => {
+                rules[mapKey] = {};
+                updateMappingDisplay();
+            });
+            
+            document.getElementById(`move-up-${type}-btn`).addEventListener('click', () => {
+                const listbox = document.getElementById(`template-${type}-listbox`);
+                const selectedIndex = listbox.selectedIndex;
+                if (selectedIndex > 0) {
+                    const itemToMove = rules[orderKey].splice(selectedIndex, 1)[0];
+                    rules[orderKey].splice(selectedIndex - 1, 0, itemToMove);
+                    
+                    const optionToMove = listbox.options[selectedIndex];
+                    listbox.remove(selectedIndex);
+                    listbox.insertBefore(optionToMove, listbox.options[selectedIndex - 1]);
+                    listbox.selectedIndex = selectedIndex - 1;
+                    updateMappingDisplay();
+                }
+            });
+
+            document.getElementById(`move-down-${type}-btn`).addEventListener('click', () => {
+                const listbox = document.getElementById(`template-${type}-listbox`);
+                const selectedIndex = listbox.selectedIndex;
+                if (selectedIndex > -1 && selectedIndex < rules[orderKey].length - 1) {
+                    const itemToMove = rules[orderKey].splice(selectedIndex, 1)[0];
+                    rules[orderKey].splice(selectedIndex + 1, 0, itemToMove);
+
+                    const optionToMove = listbox.options[selectedIndex];
+                    listbox.remove(selectedIndex);
+                    listbox.insertBefore(optionToMove, listbox.options[selectedIndex + 1]);
+                    listbox.selectedIndex = selectedIndex + 1;
+                    updateMappingDisplay();
+                }
+            });
+        }, 0);
+        return content;
+    }
+    function renderConversionRules() {
+       const content = `
+       <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-4 items-end">
+                <div>
+                     <label class="text-sm font-medium">대상 항목 (다중선택 가능)</label>
+                     <select id="conv-items-listbox" multiple class="listbox w-full mt-1 custom-scrollbar"></select>
+                </div>
+                 <div>
+                     <label for="conv-op" class="text-sm font-medium">변환 방식</label>
+                     <select id="conv-op" class="w-full p-2 border border-slate-300 rounded-md mt-1">
+                         <option>나누기</option>
+                         <option>곱하기</option>
+                         <option>퍼센트(%)로 변환</option>
+                     </select>
+                </div>
+                <div>
+                     <label for="conv-value" class="text-sm font-medium">변환 값</label>
+                     <input type="number" id="conv-value" class="w-full p-2 border border-slate-300 rounded-md mt-1">
+                </div>
+                <button type="button" id="add-conv-rule-btn" class="btn-secondary h-10">규칙 추가</button>
+            </div>
+            <div class="grid grid-cols-[1fr_auto] gap-4">
+                <div>
+                    <label class="font-semibold text-sm">설정된 변환 규칙</label>
+                    <select id="conv-rules-listbox" class="listbox w-full mt-1 custom-scrollbar"></select>
+                </div>
+                 <button type="button" id="del-conv-rule-btn" class="btn-secondary self-end !bg-red-100 !text-red-700">선택 삭제</button>
+            </div>
+       </div>
+       `;
+       return content;
+    }
+    function renderSumCheckRules() {
+       const content = `
+       <div class="space-y-4">
+             <div class="flex flex-wrap gap-2">
+                <button type="button" id="load-sum-check-btn" class="btn-secondary">최종 항목 불러오기</button>
+                <button type="button" id="add-sum-check-btn" class="btn-secondary">규칙 추가</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="font-semibold text-sm">구성 항목 (다중선택)</label>
+                    <select id="sum-components-listbox" multiple class="listbox w-full mt-1 custom-scrollbar"></select>
+                </div>
+                 <div>
+                    <label class="font-semibold text-sm">합계 항목 (단일선택)</label>
+                    <select id="sum-total-listbox" class="listbox w-full mt-1 custom-scrollbar"></select>
+                </div>
+                 <div class="grid grid-rows-[1fr_auto] gap-2">
+                    <label class="font-semibold text-sm">설정된 규칙</label>
+                    <select id="sum-rules-listbox" class="listbox w-full mt-1 custom-scrollbar"></select>
+                    <button type="button" id="del-sum-check-btn" class="btn-secondary !bg-red-100 !text-red-700">선택 삭제</button>
+                </div>
+            </div>
+       </div>
+       `;
+       return content;
+    }
+
+    // --- Step 4 Logic ---
+    function handleCriterionChange() {
+        const criterionSelect = document.getElementById('sourceCriterion');
+        const manualSourceSelect = document.getElementById('manualSource');
+        const loadManualBtn = document.getElementById('loadManualSourceBtn');
+        const selectedValue = criterionSelect.value;
+
+        const isManualRequired = selectedValue === '단일 대표 출처만 사용' || selectedValue === '대표 출처 기반 시계열 채우기';
+
+        manualSourceSelect.disabled = !isManualRequired;
+        loadManualBtn.disabled = !isManualRequired;
+
+        if (isManualRequired) {
+            if (manualSourceSelect.options.length <= 1) {
+                 manualSourceSelect.innerHTML = '<option value="">대표 출처를 선택하세요</option>';
+            }
+        } else {
+            manualSourceSelect.innerHTML = '<option>("미 지정" 아닐 시 활성화)</option>';
+        }
+    }
+
+    async function populateManualSourceCandidates() {
+        const btn = document.getElementById('loadManualSourceBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        const sourceColName = document.getElementById('source_col')?.value;
+        const timeColName = document.getElementById('time')?.value;
+
+        if (!files.sourceFile || !sourceColName || sourceColName === '없음' || !timeColName || timeColName === '없음') {
+            showAlert('2단계에서 원본 데이터의 출처 열과 연도 열을 모두 지정해야 합니다.');
+            btn.disabled = false;
+            btn.textContent = '후보 불러오기';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', files.sourceFile);
+        formData.append('source_col', sourceColName);
+        formData.append('time_col', timeColName);
+
+        try {
+            const response = await fetch('/get_source_candidates', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            const manualSourceSelect = document.getElementById('manualSource');
+            manualSourceSelect.innerHTML = '<option value="">대표 출처를 선택하세요</option>';
+            data.candidates.forEach(candidate => {
+                const option = document.createElement('option');
+                option.value = candidate;
+                option.textContent = candidate;
+                manualSourceSelect.appendChild(option);
+            });
+            showAlert('대표 출처 후보 목록을 불러왔습니다.');
+        } catch (error) {
+            showAlert(`후보 불러오기 실패: ${error.message}`);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '후보 불러오기';
+        }
+    }
+
+
+    // --- Settings Save/Load Logic ---
+    function collectSettings() {
+        const settings = {
+            source_cols: {},
+            map_cols: {},
+            rules: {},
+            step4: {}
+        };
+        sourceColsDef.forEach(def => settings.source_cols[def.id] = document.getElementById(def.id)?.value);
+        mapColsDef.forEach(def => settings.map_cols[def.id] = document.getElementById(def.id)?.value);
+        
+        rules.selected_sources = Array.from(document.getElementById('selected-sources-listbox')?.options ?? []).map(opt => opt.value);
+        settings.rules = rules;
+
+        settings.step4.sourceCriterion = document.getElementById('sourceCriterion').value;
+        settings.step4.manualSource = document.getElementById('manualSource').value;
+        settings.step4.startYear = document.getElementById('startYear').value;
+        settings.step4.endYear = document.getElementById('endYear').value;
+        
+        return settings;
+    }
+
+    async function applySettings(settings) {
+        if (!settings) return;
+
+        // Apply Step 2 settings
+        if (settings.source_cols) {
+            for (const [id, value] of Object.entries(settings.source_cols)) {
+                const el = document.getElementById(id);
+                if (el) el.value = value;
+            }
+        }
+        if (settings.map_cols) {
+            for (const [id, value] of Object.entries(settings.map_cols)) {
+                const el = document.getElementById(id);
+                if (el) el.value = value;
+            }
+        }
+        
+        // Apply Step 3 settings
+        if (settings.rules) {
+            Object.assign(rules, settings.rules);
+            initializeAllAccordions(); // Re-render accordions to show loaded data
+            
+            // Repopulate selected sources listbox
+            const selectedSourcesListbox = document.getElementById('selected-sources-listbox');
+            if(selectedSourcesListbox) {
+                populateListbox(selectedSourcesListbox, rules.selected_sources, rules.selected_sources);
+            }
+        }
+        
+        // Apply Step 4 settings
+        if (settings.step4) {
+            document.getElementById('sourceCriterion').value = settings.step4.sourceCriterion || '미 지정';
+            document.getElementById('manualSource').value = settings.step4.manualSource || '';
+            document.getElementById('startYear').value = settings.step4.startYear || '';
+            document.getElementById('endYear').value = settings.step4.endYear || '';
+            handleCriterionChange(); // Apply visibility logic
+        }
+
+        showAlert('설정 파일을 성공적으로 불러왔습니다.');
+    }
+
+    document.getElementById('save-settings-btn').addEventListener('click', () => {
+        const settings = collectSettings();
+        const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `data_processing_settings_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    const settingsFileInput = document.getElementById('settings-file-input');
+    document.getElementById('load-settings-btn').addEventListener('click', () => {
+        if (currentStep < 2) {
+            showAlert('먼저 1단계에서 파일을 모두 업로드하고 2단계로 이동한 후 설정을 불러올 수 있습니다.');
+            return;
+        }
+        settingsFileInput.click();
+    });
+    settingsFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const settings = JSON.parse(event.target.result);
+                applySettings(settings);
+            } catch (err) {
+                showAlert(`설정 파일을 읽는 중 오류가 발생했습니다: ${err.message}`);
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = ''; // Reset for next load
+    });
+
+    function downloadBase64File(base64Data, filename) {
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    }
+
+    document.getElementById('download-result-btn').addEventListener('click', () => {
+        if (resultFile.data && resultFile.name) {
+            downloadBase64File(resultFile.data, resultFile.name);
+        } else {
+            showAlert('다운로드할 파일 데이터가 없습니다.');
+        }
+    });
+
+    // --- Form Submission ---
+    document.getElementById('process-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        rules.selected_sources = Array.from(document.getElementById('selected-sources-listbox')?.options ?? []).map(opt => opt.value);
+        
+        const spinner = submitBtn.querySelector('i');
+        const btnText = document.getElementById('submit-btn-text');
+        spinner.classList.remove('hidden');
+        btnText.textContent = '처리 중...';
+        submitBtn.disabled = true;
+        
+        const statusDiv = document.getElementById('status');
+        statusDiv.innerHTML = `<i class="fas fa-info-circle mr-2"></i> 데이터 처리 중... 잠시만 기다려 주세요.`;
+        statusDiv.className = 'mt-8 text-center p-4 bg-blue-50 text-blue-700 rounded-lg';
+
+        const formData = new FormData();
+        Object.entries(files).forEach(([key, file]) => {
+            if(file) formData.append(key, file);
+        });
+        
+        const sourceCols = {};
+        sourceColsDef.forEach(def => sourceCols[def.id] = document.getElementById(def.id)?.value);
+        formData.append('sourceCols', JSON.stringify(sourceCols));
+
+        const mapCols = {};
+        mapColsDef.forEach(def => mapCols[def.id] = document.getElementById(def.id)?.value);
+        formData.append('mapCols', JSON.stringify(mapCols));
+        
+        formData.append('rules', JSON.stringify(rules));
+        formData.append('sourceCriterion', document.getElementById('sourceCriterion').value);
+        formData.append('manualSource', document.getElementById('manualSource').value);
+        formData.append('startYear', document.getElementById('startYear').value);
+        formData.append('endYear', document.getElementById('endYear').value);
+        formData.append('outputFileName', document.getElementById('outputFileName').value);
+        formData.append('applyComments', withComments);
+        
+        try {
+            const response = await fetch('/process', { method: 'POST', body: formData });
+            const data = await response.json();
+            
+            if (!response.ok || data.error) {
+                throw new Error(data.error || `서버 오류: ${response.status}`);
+            }
+
+            // Show dashboard
+            document.getElementById('run-settings').classList.add('hidden');
+            document.getElementById('result-dashboard').classList.remove('hidden');
+            
+            // Populate summary
+            document.getElementById('summary-processed-rows').textContent = data.summary.processed_rows;
+            document.getElementById('summary-db-countries').textContent = data.summary.db_countries_count;
+            document.getElementById('summary-extra-countries').textContent = data.summary.extra_countries_count;
+            document.getElementById('summary-discrepancies').textContent = data.summary.discrepancies_found;
+
+            // Store file data for download button
+            resultFile.data = data.file_data;
+            resultFile.name = data.filename;
+
+        } catch (error) {
+            console.error('Processing error:', error);
+            statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i> 오류: ${error.message}`;
+            statusDiv.className = 'mt-8 text-center p-4 bg-red-50 text-red-700 rounded-lg';
+        } finally {
+            spinner.classList.add('hidden');
+            btnText.textContent = '가공 시작';
+            submitBtn.disabled = false;
+        }
+    });
+
+    // --- App Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('with_comments') === 'true') {
+            withComments = true;
+            document.title = '데이터 가공 자동화 (주석 처리 포함)';
+            
+            const commentFileContainer = document.getElementById('comment-rule-file-container');
+            commentFileContainer.classList.remove('hidden');
+            document.getElementById('commentRuleFile').required = true;
+            
+            sourceColsDef = sourceColsDefWithComments;
+            
+            document.querySelector('#step-1 h2').textContent = '시작하기 (주석 처리 포함)';
+            document.querySelectorAll('.comment-mode-help').forEach(el => el.classList.remove('hidden'));
+        }
+
+        ['sourceFile', 'mappingFile', 'templateFile', 'commentRuleFile'].forEach(setupFileInput);
+        setupHelpIcons('#step-1 .help-icon');
+        updateWizard();
+    });
+</script>
+</body>
+</html>

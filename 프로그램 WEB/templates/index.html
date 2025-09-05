@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>데이터 자동화 도구</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Pretendard', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-10 text-center">
+        <h1 class="text-4xl font-bold text-slate-800 mb-4">데이터 자동화 도구</h1>
+        <p class="text-slate-500 mb-10">수행할 작업을 선택해주세요.</p>
+
+        <div class="space-y-6">
+            <a href="/country-cleanup" class="group block w-full p-6 bg-blue-500 text-white rounded-lg shadow-md hover:bg-blue-600 transition-transform hover:scale-105">
+                <div class="flex items-center justify-center">
+                    <i class="fas fa-globe-asia text-3xl mr-5"></i>
+                    <div>
+                        <h2 class="text-2xl font-semibold">1. 나라 정리</h2>
+                        <p class="text-blue-100">원본 데이터의 국가명을 표준화하고 '나라 정리 파일'을 생성합니다.</p>
+                    </div>
+                </div>
+            </a>
+
+            <a href="/comment-rule-maker" class="group block w-full p-6 bg-indigo-500 text-white rounded-lg shadow-md hover:bg-indigo-600 transition-transform hover:scale-105">
+                <div class="flex items-center justify-center">
+                    <i class="fas fa-comment-dots text-3xl mr-5"></i>
+                    <div>
+                        <h2 class="text-2xl font-semibold">2. 주석 규칙 생성</h2>
+                        <p class="text-indigo-100">주석 처리의 기준이 되는 '주석 규칙 파일'을 생성합니다.</p>
+                    </div>
+                </div>
+            </a>
+
+            <a href="/processing-choice" class="group block w-full p-6 bg-green-500 text-white rounded-lg shadow-md hover:bg-green-600 transition-transform hover:scale-105">
+                <div class="flex items-center justify-center">
+                    <i class="fas fa-cogs text-3xl mr-5"></i>
+                    <div>
+                        <h2 class="text-2xl font-semibold">3. 데이터 가공 자동화</h2>
+                        <p class="text-green-100">원본 데이터를 가공하고 DB와 비교하여 최종 결과물을 생성합니다.</p>
+                    </div>
+                </div>
+            </a>
+
+             <a href="/history" class="group block w-full p-6 bg-slate-500 text-white rounded-lg shadow-md hover:bg-slate-600 transition-transform hover:scale-105">
+                <div class="flex items-center justify-center">
+                    <i class="fas fa-history text-3xl mr-5"></i>
+                    <div>
+                        <h2 class="text-2xl font-semibold">4. 작업 이력 보기</h2>
+                        <p class="text-slate-100">과거에 실행했던 데이터 가공 작업의 로그를 확인합니다.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+</body>
+</html>

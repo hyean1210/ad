@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>자동 나라 정리 도구</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- SheetJS 라이브러리 추가 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Inter', 'Pretendard', sans-serif; }
+        .file-label-success { background-color: #ecfdf5; border-color: #10b981; color: #047857; }
+        .btn-primary { background-color: #3b82f6; color: white; transition: background-color 0.2s; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-primary:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .help-icon { color: #9ca3af; cursor: pointer; transition: color 0.2s; }
+        .help-icon:hover { color: #3b82f6; }
+        .preview-container {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            max-height: 200px;
+            overflow: auto;
+            font-size: 0.8rem;
+            background-color: #f9fafb;
+        }
+        .preview-container table { width: 100%; }
+        .preview-container th, .preview-container td {
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            white-space: nowrap;
+        }
+        .preview-container th { background-color: #f3f4f6; font-weight: 600; }
+        /* Modal 스타일 */
+        #help-modal { display: none; }
+    </style>
+</head>
+<body class="bg-slate-50 flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-5xl bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-slate-800">자동 나라 정리 (Matcher)</h1>
+            <a href="/" class="text-sm text-blue-500 hover:underline"><i class="fas fa-arrow-left mr-2"></i>처음으로 돌아가기</a>
+        </div>
+        <div class="p-8">
+            <p class="text-slate-600 mb-8 text-center">
+                '원본 데이터', 'DB 파일'에서 국가명 열을 각각 선택하고, 매칭 기준이 되는 '마스터 파일'을 업로드하세요. <br>
+                '매칭 실행' 버튼을 누르면 원본 스크립트와 동일한 로직으로 정리된 엑셀 파일을 생성합니다.
+            </p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 pb-8 border-b">
+                <!-- 원본 파일 -->
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <label class="font-semibold text-slate-700">① 원본 데이터</label>
+                        <i class="fas fa-question-circle help-icon" data-help-topic="sourceFile"></i>
+                    </div>
+                    <input type="file" id="sourceFile" class="hidden" accept=".csv, .xlsx, .xls">
+                    <label for="sourceFile" class="flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer hover:bg-slate-50">
+                        <i class="fas fa-cloud-upload-alt mr-3 text-slate-400"></i><span id="sourceFile-name">파일 선택</span>
+                    </label>
+                    <select id="source-col" class="mt-2 w-full p-2 border border-slate-300 rounded-md" disabled><option>국가명 열 선택</option></select>
+                    <div id="sourceFile-preview" class="mt-2 preview-container hidden"></div>
+                </div>
+                <!-- DB 파일 -->
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <label class="font-semibold text-slate-700">② DB 파일</label>
+                        <i class="fas fa-question-circle help-icon" data-help-topic="dbFile"></i>
+                    </div>
+                    <input type="file" id="dbFile" class="hidden" accept=".csv, .xlsx, .xls">
+                    <label for="dbFile" class="flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer hover:bg-slate-50">
+                        <i class="fas fa-cloud-upload-alt mr-3 text-slate-400"></i><span id="dbFile-name">파일 선택</span>
+                    </label>
+                    <select id="db-col" class="mt-2 w-full p-2 border border-slate-300 rounded-md" disabled><option>국가명 열 선택</option></select>
+                    <div id="dbFile-preview" class="mt-2 preview-container hidden"></div>
+                </div>
+                <!-- 마스터 파일 -->
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <label class="font-semibold text-slate-700">③ 국가명 마스터 파일</label>
+                        <i class="fas fa-question-circle help-icon" data-help-topic="masterFile"></i>
+                    </div>
+                    <input type="file" id="masterFile" class="hidden" accept=".csv, .xlsx, .xls">
+                    <label for="masterFile" class="flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer hover:bg-slate-50 h-[68px]">
+                        <i class="fas fa-cloud-upload-alt mr-3 text-slate-400"></i><span id="masterFile-name">파일 선택</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="mb-8 px-4">
+                <label for="outputFileName" class="font-semibold text-slate-700 block mb-2">④ 저장할 파일 이름</label>
+                <input type="text" id="outputFileName" name="outputFileName" value="자동매칭_나라정리_결과.xlsx" class="w-full p-2 border border-slate-300 rounded-md">
+                <p class="text-xs text-slate-500 mt-1">파일 저장 위치는 브라우저 설정에 따라 결정됩니다.</p>
+            </div>
+
+            <div class="text-center">
+                <button id="run-matching-btn" class="w-1/2 h-14 btn-primary text-lg font-bold rounded-lg">
+                    <span id="btn-text"><i class="fas fa-cogs mr-2"></i>매칭 실행 및 엑셀 생성</span>
+                    <i id="btn-spinner" class="fas fa-spinner fa-spin hidden"></i>
+                </button>
+                 <div id="status" class="mt-4 text-slate-600 h-6"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 도움말 Modal -->
+    <div id="help-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modal-title" class="text-xl font-bold text-slate-800">도움말</h3>
+                <button id="modal-close-btn" class="text-slate-500 hover:text-slate-800">&times;</button>
+            </div>
+            <div id="modal-content" class="text-slate-600 prose max-w-none"></div>
+        </div>
+    </div>
+
+<script>
+    const files = {
+        sourceFile: null,
+        dbFile: null,
+        masterFile: null
+    };
+
+    const helpContent = {
+        sourceFile: `
+            <h4>원본 데이터 파일</h4>
+            <p>실제 가공 및 분석 대상이 될 원본 통계 파일입니다.</p>
+            <p>데이터가 <strong>열(Column) 형식</strong>으로 정리된 파일만 분석 가능합니다. 국가명이 포함된 열을 선택해야 합니다.</p>
+        `,
+        dbFile: `
+            <h4>DB 파일 (양식)</h4>
+            <p>데이터가 최종적으로 정리될 기준 양식 파일입니다.</p>
+            <p>통계 DB 관리 시스템에서 받은 <strong>시계열표(표두) 형식</strong>의 엑셀 파일이어야 합니다. 이 파일에서도 국가명이 포함된 열을 선택해야 합니다.</p>
+        `,
+        masterFile: `
+            <h4>국가명 마스터 파일</h4>
+            <p>프로그램이 다양한 국가명 표기를 표준화하는데 사용할 기준 정보 파일입니다.</p>
+            <p>각 국제기구별 국가명이 정리된 엑셀 파일이어야 합니다. (예: Korea, Rep. of -> Korea, Rep. of)</p>
+        `
+    };
+
+    function showModal(title, content) {
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-content').innerHTML = content;
+        document.getElementById('help-modal').style.display = 'flex';
+    }
+
+    document.getElementById('modal-close-btn').addEventListener('click', () => {
+        document.getElementById('help-modal').style.display = 'none';
+    });
+
+    document.querySelectorAll('.help-icon').forEach(icon => {
+        icon.addEventListener('click', () => {
+            const topic = icon.getAttribute('data-help-topic');
+            if (helpContent[topic]) {
+                const title = icon.previousElementSibling.textContent;
+                showModal(title, helpContent[topic]);
+            }
+        });
+    });
+
+    function renderPreview(file, previewContainerId) {
+        const reader = new FileReader();
+        const previewContainer = document.getElementById(previewContainerId);
+        previewContainer.innerHTML = '미리보기 로딩 중...';
+        previewContainer.classList.remove('hidden');
+
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+
+                if (json.length === 0) {
+                    previewContainer.innerHTML = '파일에 데이터가 없습니다.';
+                    return;
+                }
+
+                let table = '<table>';
+                // 헤더
+                table += '<thead><tr>';
+                json[0].forEach(cell => table += `<th>${cell}</th>`);
+                table += '</tr></thead>';
+                // 본문 (최대 5줄)
+                table += '<tbody>';
+                for (let i = 1; i < Math.min(json.length, 6); i++) {
+                    table += '<tr>';
+                    json[i].forEach(cell => table += `<td>${cell}</td>`);
+                    table += '</tr>';
+                }
+                table += '</tbody></table>';
+                previewContainer.innerHTML = table;
+            } catch (err) {
+                previewContainer.innerHTML = '<span class="text-red-500">미리보기를 생성할 수 없습니다. 파일 형식을 확인해주세요.</span>';
+                console.error("Preview Error:", err);
+            }
+        };
+        reader.onerror = function() {
+            previewContainer.innerHTML = '<span class="text-red-500">파일을 읽는 중 오류가 발생했습니다.</span>';
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function setupFileInput(inputId, colSelectorId = null) {
+        const input = document.getElementById(inputId);
+        const nameLabel = document.getElementById(`${inputId}-name`);
+        
+        input.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            files[inputId] = file;
+            nameLabel.textContent = file.name;
+            input.nextElementSibling.classList.add('file-label-success');
+            
+            if (colSelectorId) {
+                renderPreview(file, `${inputId}-preview`);
+                
+                const colSelect = document.getElementById(colSelectorId);
+                colSelect.disabled = true;
+                colSelect.innerHTML = '<option>열 로딩 중...</option>';
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const res = await fetch('/get_columns', { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error('서버 응답 오류.');
+                    
+                    const data = await res.json();
+                    if (data.error) throw new Error(data.error);
+
+                    colSelect.innerHTML = `<option value="">국가명 열 선택</option>`;
+                    data.columns.forEach(col => {
+                        const option = document.createElement('option');
+                        option.value = col;
+                        option.textContent = col;
+                        colSelect.appendChild(option);
+                    });
+                    colSelect.disabled = false;
+                } catch (err) {
+                    showModal('오류', `열 정보를 불러오는 데 실패했습니다: ${err.message}`);
+                    colSelect.innerHTML = '<option>오류 발생</option>';
+                }
+            }
+        });
+    }
+
+    setupFileInput('sourceFile', 'source-col');
+    setupFileInput('dbFile', 'db-col');
+    setupFileInput('masterFile');
+
+    document.getElementById('run-matching-btn').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        const statusDiv = document.getElementById('status');
+        const btnText = document.getElementById('btn-text');
+        const btnSpinner = document.getElementById('btn-spinner');
+        
+        const sourceCol = document.getElementById('source-col').value;
+        const dbCol = document.getElementById('db-col').value;
+
+        if (!files.sourceFile || !files.dbFile || !files.masterFile || !sourceCol || !dbCol) {
+            showModal('오류', '모든 파일과 국가명 열을 선택해야 합니다.');
+            return;
+        }
+
+        btn.disabled = true;
+        btnText.classList.add('hidden');
+        btnSpinner.classList.remove('hidden');
+        statusDiv.textContent = '데이터를 서버로 전송하고 있습니다...';
+
+        const formData = new FormData();
+        formData.append('sourceFile', files.sourceFile);
+        formData.append('dbFile', files.dbFile);
+        formData.append('masterFile', files.masterFile);
+        formData.append('sourceCol', sourceCol);
+        formData.append('dbCol', dbCol);
+
+        const outputFileName = document.getElementById('outputFileName').value || '자동매칭_나라정리_결과.xlsx';
+        formData.append('outputFileName', outputFileName);
+
+        try {
+            statusDiv.textContent = '서버에서 국가명을 매칭하고 있습니다. 잠시만 기다려주세요...';
+            const res = await fetch('/run_country_matching', { method: 'POST', body: formData });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || '알 수 없는 서버 오류가 발생했습니다.');
+            }
+
+            statusDiv.textContent = '결과 파일을 생성 중입니다...';
+            const blob = await res.blob();
+            
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = outputFileName;
+            document.body.appendChild(a);
+            a.click();
+            
+            window.URL.revokeObjectURL(url);
+            a.remove();
+            
+            statusDiv.innerHTML = '<span class="text-green-600 font-semibold">✅ 매칭 완료! 파일이 다운로드되었습니다.</span>';
+
+        } catch (err) {
+            statusDiv.innerHTML = `<span class="text-red-600 font-semibold">❌ 오류 발생: ${err.message}</span>`;
+            showModal('오류', err.message);
+        } finally {
+            btn.disabled = false;
+            btnText.classList.remove('hidden');
+            btnSpinner.classList.add('hidden');
+        }
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>주석 규칙 생성 도구</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Pretendard', sans-serif; }
+        .file-label-success { background-color: #ecfdf5; border-color: #10b981; color: #047857; }
+        .btn-primary { background-color: #4f46e5; color: white; }
+        .btn-primary:hover { background-color: #4338ca; }
+        .btn-primary:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .step { display: none; }
+        .step.active { display: block; }
+        .step-indicator.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+        .step-indicator.completed { color: #16a34a; }
+        .checkbox-label { display: flex; align-items: center; cursor: pointer; }
+        .checkbox-label input { margin-right: 0.5rem; }
+    </style>
+</head>
+<body class="bg-slate-50 flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-7xl bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="p-6 border-b border-slate-200">
+             <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-800">주석 규칙 생성</h1>
+                    <p class="text-slate-500 mt-1">주석 마스터 파일을 분석하여 '주석 규칙 파일'을 생성합니다.</p>
+                </div>
+                <a href="/" class="text-slate-500 hover:text-slate-800 transition-colors">
+                    <i class="fas fa-home mr-2"></i>홈으로
+                </a>
+            </div>
+            <!-- Progress Bar -->
+            <div class="flex justify-between text-center">
+                 <div id="indicator-1" class="step-indicator flex-1 pb-2 border-b-4 text-sm font-semibold active">
+                    <i class="fas fa-file-upload mr-2"></i> 1. 파일 및 열 선택
+                </div>
+                <div id="indicator-2" class="step-indicator flex-1 pb-2 border-b-4 text-sm font-semibold text-slate-400">
+                    <i class="fas fa-tasks mr-2"></i> 2. 규칙 분류 및 수정
+                </div>
+                <div id="indicator-3" class="step-indicator flex-1 pb-2 border-b-4 text-sm font-semibold text-slate-400">
+                    <i class="fas fa-save mr-2"></i> 3. 최종 파일 생성
+                </div>
+            </div>
+        </div>
+
+        <form id="rule-maker-form" class="p-8">
+            <!-- Step 1: File Upload & Column Selection -->
+            <div id="step-1" class="step active">
+                <div class="mb-8">
+                    <label class="font-semibold text-slate-700">① 주석 마스터 파일</label>
+                    <p class="text-xs text-slate-500 mb-2">주석 규칙을 추출할 원본 파일입니다.</p>
+                    <input type="file" id="masterFile" name="file" class="hidden" required accept=".csv,.xlsx,.xls">
+                    <label for="masterFile" class="file-label flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer hover:bg-slate-50">
+                        <i class="fas fa-cloud-upload-alt mr-3 text-slate-400"></i><span id="masterFile-name">파일을 선택하거나 드래그하세요</span>
+                    </label>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div>
+                        <label for="noteCol1" class="font-semibold text-slate-700">② 주석내용 열 1 (필수)</label>
+                        <select id="noteCol1" name="noteCol1" class="w-full p-2 border border-slate-300 rounded-md mt-2" disabled>
+                            <option>파일을 먼저 선택하세요</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="noteCol2" class="font-semibold text-slate-700">③ 주석내용 열 2 (선택)</label>
+                        <select id="noteCol2" name="noteCol2" class="w-full p-2 border border-slate-300 rounded-md mt-2" disabled>
+                            <option>파일을 먼저 선택하세요</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="noteCol3" class="font-semibold text-slate-700">④ 주석내용 열 3 (선택)</label>
+                        <select id="noteCol3" name="noteCol3" class="w-full p-2 border border-slate-300 rounded-md mt-2" disabled>
+                            <option>파일을 먼저 선택하세요</option>
+                        </select>
+                    </div>
+                </div>
+                 <div class="mt-8">
+                    <label class="font-semibold text-slate-700">⑤ 주석 카테고리 열 선택 (다중 선택 가능)</label>
+                    <p class="text-xs text-slate-500 mb-2">주석을 분류하는 기준이 되는 모든 열을 선택하세요. (예: 자료 상태, 단위, 연령 등)</p>
+                    <div id="category-cols-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 border p-4 rounded-lg bg-slate-50/50">
+                        <p class="text-slate-500">파일을 선택하면 열 목록이 표시됩니다.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Review & Edit Rules -->
+            <div id="step-2" class="step">
+                <p class="text-slate-600 mb-1">시스템이 자동으로 분류하지 못한 키워드들입니다. 아래 표에서 각 키워드에 해당하는 카테고리를 선택하고, 최종 주석 내용을 수정해주세요.</p>
+                <p class="text-xs text-slate-500 mb-4">하나의 키워드에 여러 카테고리를 선택하면, 모호한 규칙으로 처리되어 최종 파일에는 포함되지만, 데이터 가공 시 직접 확인해야 합니다.</p>
+                <div class="overflow-auto border rounded-lg max-h-[500px]">
+                    <table class="min-w-full divide-y divide-slate-200">
+                        <thead class="bg-slate-50 sticky top-0">
+                            <tr id="review-table-header">
+                                <!-- Headers will be generated by JS -->
+                            </tr>
+                        </thead>
+                        <tbody id="review-table-body" class="bg-white divide-y divide-slate-200">
+                            <!-- Review rows will be rendered here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Step 3: Generate File -->
+            <div id="step-3" class="step">
+                 <div class="mb-8">
+                    <label for="outputFileName" class="font-semibold text-slate-700 block mb-2">저장할 파일 이름</label>
+                    <input type="text" id="outputFileName" name="outputFileName" value="주석_규칙_파일.xlsx" class="w-full max-w-md p-2 border border-slate-300 rounded-md">
+                    <p class="text-xs text-slate-500 mt-1">파일 저장 위치는 브라우저 설정에 따라 결정됩니다.</p>
+                </div>
+                <div class="bg-green-50 text-green-800 p-4 rounded-lg">
+                    <h3 class="font-bold mb-2"><i class="fas fa-check-circle mr-2"></i>분석 완료</h3>
+                    <p id="summary-text" class="text-sm">규칙 분류가 완료되었습니다. 아래 버튼을 눌러 최종 규칙 파일을 생성하고 다운로드하세요.</p>
+                </div>
+            </div>
+
+            <div id="status" class="mt-6 text-center text-sm p-3 rounded-lg h-12"></div>
+            
+             <!-- Navigation Buttons -->
+            <div class="mt-8 pt-6 border-t border-slate-200 flex justify-between items-center">
+                <button type="button" id="prev-btn" class="bg-slate-200 text-slate-700 font-bold py-2 px-6 rounded-lg hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed">이전</button>
+                <button type="button" id="next-btn" class="btn-primary font-bold py-2 px-6 rounded-lg hover:scale-105">다음</button>
+                <button type="submit" id="submit-btn" class="btn-primary font-bold py-3 px-8 rounded-lg transition-transform hover:scale-105 hidden">
+                    <i class="fas fa-cogs mr-2"></i>규칙 파일 생성 시작
+                </button>
+            </div>
+        </form>
+    </div>
+
+<script>
+    let currentStep = 1;
+    const totalSteps = 3;
+    let masterFile = null;
+    let analysisResult = {
+        needs_review: [],
+        auto_resolved: [],
+        auto_exceptions: [],
+        category_columns: []
+    };
+
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const submitBtn = document.getElementById('submit-btn');
+    const statusDiv = document.getElementById('status');
+
+    function updateWizard() {
+        document.querySelectorAll('.step-indicator').forEach((el, i) => {
+            el.classList.remove('active', 'completed', 'text-slate-400');
+            if (i + 1 < currentStep) {
+                el.classList.add('completed');
+            } else if (i + 1 === currentStep) {
+                el.classList.add('active');
+            } else {
+                el.classList.add('text-slate-400');
+            }
+        });
+        document.querySelectorAll('.step').forEach((el, i) => el.classList.toggle('active', i + 1 === currentStep));
+        
+        prevBtn.disabled = currentStep === 1;
+        nextBtn.style.display = currentStep === totalSteps ? 'none' : 'inline-block';
+        submitBtn.style.display = currentStep === totalSteps ? 'inline-block' : 'none';
+    }
+
+    function setStatus(message, type = 'info') {
+        const colors = {
+            info: 'bg-blue-50 text-blue-700',
+            success: 'bg-green-50 text-green-700',
+            error: 'bg-red-50 text-red-700',
+        };
+        statusDiv.textContent = message;
+        statusDiv.className = `mt-6 text-center text-sm p-3 rounded-lg ${colors[type]}`;
+    }
+    function updateCategoryCheckboxes() {
+            const noteCol1 = document.getElementById('noteCol1').value;
+            const noteCol2 = document.getElementById('noteCol2').value;
+            const noteCol3 = document.getElementById('noteCol3').value;
+            const selectedNoteCols = new Set([noteCol1, noteCol2, noteCol3]);
+
+            const categoryContainer = document.getElementById('category-cols-container');
+            // label 태그를 직접 찾도록 수정합니다.
+            const labels = categoryContainer.querySelectorAll('label');
+
+            labels.forEach(label => {
+                const checkbox = label.querySelector('input[type="checkbox"]');
+                if (checkbox && selectedNoteCols.has(checkbox.value)) {
+                    label.style.display = 'none'; // 주석내용 열로 선택되면 숨김
+                    checkbox.checked = false;     // 값도 초기화
+                } else if (checkbox) {
+                    label.style.display = 'flex'; // 그렇지 않으면 보여줌
+                }
+            });
+        }
+
+
+    document.getElementById('masterFile').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        masterFile = file;
+
+        document.getElementById('masterFile-name').textContent = file.name;
+        document.querySelector('label[for="masterFile"]').classList.add('file-label-success');
+        
+        setStatus('열 정보를 불러오는 중...', 'info');
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/get_columns', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            const noteColSelects = [document.getElementById('noteCol1'), document.getElementById('noteCol2'), document.getElementById('noteCol3')];
+            const categoryColsContainer = document.getElementById('category-cols-container');
+            
+            noteColSelects.forEach(select => {
+                 select.innerHTML = '<option value="">선택 안 함</option>';
+            });
+            categoryColsContainer.innerHTML = '';
+
+            data.columns.forEach(col => {
+                // Populate note column dropdowns
+                noteColSelects.forEach(select => {
+                    const option = document.createElement('option');
+                    option.value = col;
+                    option.textContent = col;
+                    select.appendChild(option);
+                });
+
+                // Populate category column checkboxes
+                const label = document.createElement('label');
+                label.className = 'checkbox-label text-sm';
+                label.innerHTML = `<input type="checkbox" name="categoryCols" value="${col}" class="rounded"> ${col}`;
+                categoryColsContainer.appendChild(label);
+            });
+            noteColSelects.forEach(select => select.disabled = false);
+            document.getElementById('noteCol1').options[0].textContent = "선택하세요 (필수)";
+
+            setStatus('주석내용 열과 카테고리 열들을 선택하고 \'다음\' 버튼을 누르세요.', 'info');
+
+            document.getElementById('noteCol1').addEventListener('change', updateCategoryCheckboxes);
+            document.getElementById('noteCol2').addEventListener('change', updateCategoryCheckboxes);
+            document.getElementById('noteCol3').addEventListener('change', updateCategoryCheckboxes);
+            // 페이지 로드 시 한 번 실행하여 초기 상태를 반영합니다.
+            updateCategoryCheckboxes();
+
+        } catch (err) {
+            setStatus(`오류: ${err.message}`, 'error');
+        }
+    });
+    
+    function renderReviewTable() {
+        const tableHeader = document.getElementById('review-table-header');
+        const tableBody = document.getElementById('review-table-body');
+        tableHeader.innerHTML = '';
+        tableBody.innerHTML = '';
+
+        tableHeader.innerHTML = `
+            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">키워드 (분류 필요)</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">분류 및 최종 내용 수정</th>
+        `;
+
+        if (analysisResult.needs_review.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="2" class="text-center p-8 text-slate-500">시스템이 자동으로 모든 규칙을 분류했습니다! <br> 바로 다음 단계로 진행하여 파일을 생성하세요.</td></tr>`;
+            return;
+        }
+
+        analysisResult.needs_review.forEach(item => {
+            if (item.type === 'simple_keyword') {
+                // 단순 키워드 렌더링 (이전과 동일)
+                const row = tableBody.insertRow();
+                row.dataset.itemType = 'simple';
+                row.dataset.keyword = item.keyword;
+                
+                let categoryCheckboxesHTML = analysisResult.category_columns.map(col => `
+                    <label class="checkbox-label text-sm whitespace-nowrap"><input type="checkbox" data-category="${col}" class="rounded mr-1">${col}</label>
+                `).join('');
+
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-sm text-slate-700 font-medium align-top">${item.keyword}</td>
+                    <td class="px-4 py-3 space-y-2">
+                        <input type="text" value="${item.keyword}" class="final-content-input w-full p-1 border border-slate-300 rounded-md" style="min-width: 250px;">
+                        <div class="flex flex-wrap gap-x-4 gap-y-1">${categoryCheckboxesHTML}</div>
+                    </td>
+                `;
+            } else if (item.type === 'ambiguous_group') {
+                // ▼▼▼ '모호한 그룹'을 위한 새로운 UI 렌더링 ▼▼▼
+                const groupRow = tableBody.insertRow();
+                groupRow.dataset.itemType = 'group';
+                groupRow.dataset.groupId = item.id;
+                // 카테고리 원본 데이터를 data 속성에 저장
+                groupRow.dataset.categories = JSON.stringify(item.categories);
+
+                let categoryText = Object.entries(item.categories).map(([key, value]) => `
+                    <span class="text-xs font-semibold bg-slate-200 text-slate-700 px-2 py-1 rounded" style="font-family: Pretendard, sans-serif;">${key}: ${value}</span>
+                `).join(' ');
+
+                let categoryOptionsHTML = `<option value="">-- 예외로 처리 --</option>`;
+                Object.keys(item.categories).forEach(cat => {
+                    categoryOptionsHTML += `<option value="${cat}">${cat}</option>`;
+                });
+                
+                let keywordRowsHTML = item.keywords.map(kw => `
+                    <div class="grid grid-cols-[1fr_auto_1fr] gap-x-3 items-center border-t py-2" data-keyword="${kw}">
+                        <div class="text-sm text-slate-800 break-all">${kw}</div>
+                        <div class="text-slate-400">→</div>
+                        <div>
+                            <select class="category-select w-full p-1 border border-slate-300 rounded-md mb-1">
+                                ${categoryOptionsHTML}
+                            </select>
+                            <input type="text" class="final-content-input w-full p-1 border border-slate-300 rounded-md" placeholder="카테고리 선택 시 자동 입력">
+                        </div>
+                    </div>
+                `).join('');
+
+                groupRow.innerHTML = `
+                    <td class="px-4 py-3 bg-sky-50" colspan="2">
+                        <div class="font-bold text-sky-800 mb-2"><i class="fas fa-project-diagram mr-2"></i>모호한 규칙 분리</div>
+                        <p class="text-sm text-slate-600 mb-2">
+                            한 줄에 여러 규칙이 섞여있습니다. 각 키워드에 맞는 카테고리를 직접 연결해주세요.<br>
+                            연결하지 않은 키워드는 '예외'로 처리됩니다.
+                        </p>
+                        
+                        <div class="my-3 p-2 border-l-4 border-slate-300 bg-slate-100/50">
+                            <span class="text-xs text-slate-500 font-bold">이 행의 카테고리 정보:</span>
+                            <div class="mt-1 flex flex-wrap gap-1">${categoryText}</div>
+                        </div>
+
+                        <div class="p-2">${keywordRowsHTML}</div>
+                    </td>
+                `;
+            }
+        });
+
+        // 동적으로 생성된 드롭다운에 이벤트 리스너 추가
+        document.querySelectorAll('.category-select').forEach(select => {
+            select.addEventListener('change', (e) => {
+                const selectedCategory = e.target.value;
+                const textInput = e.target.closest('div').querySelector('.final-content-input');
+                const groupRow = e.target.closest('tr[data-item-type="group"]');
+                const categoriesData = JSON.parse(groupRow.dataset.categories);
+                
+                if (selectedCategory && categoriesData[selectedCategory]) {
+                    textInput.value = categoriesData[selectedCategory];
+                } else {
+                    textInput.value = '';
+                }
+            });
+        });
+    }
+
+    async function analyzeAndGoToStep2() {
+        if (!masterFile) {
+            setStatus('주석 마스터 파일을 먼저 선택해주세요.', 'error');
+            return false;
+        }
+        
+        const form = document.getElementById('rule-maker-form');
+        const noteCols = [form.querySelector('#noteCol1').value, form.querySelector('#noteCol2').value, form.querySelector('#noteCol3').value].filter(Boolean);
+        const selectedCategoryCols = Array.from(form.querySelectorAll('input[name="categoryCols"]:checked')).map(cb => cb.value);
+
+        if (noteCols.length === 0 || selectedCategoryCols.length === 0) {
+            setStatus('필수 주석내용 열과 하나 이상의 카테고리 열을 선택해야 합니다.', 'error');
+            return false;
+        }
+
+        const formData = new FormData();
+        formData.append('file', masterFile);
+        formData.append('noteCols', JSON.stringify(noteCols));
+        formData.append('categoryCols', JSON.stringify(selectedCategoryCols));
+
+        setStatus('파일을 분석하여 분류가 필요한 규칙을 추출하는 중입니다...', 'info');
+        nextBtn.disabled = true;
+
+        try {
+            const response = await fetch('/analyze_master_comments', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            analysisResult = data;
+            renderReviewTable();
+            setStatus('', 'info');
+            currentStep++;
+            updateWizard();
+            return true;
+        } catch (err) {
+            setStatus(`분석 오류: ${err.message}`, 'error');
+            return false;
+        } finally {
+            nextBtn.disabled = false;
+        }
+    }
+
+    function collectFinalRules() {
+        const userResolvedRules = [];
+        const userExceptionRules = new Set();
+
+        document.querySelectorAll('#review-table-body tr').forEach(row => {
+            const itemType = row.dataset.itemType;
+
+            if (itemType === 'simple') {
+                // 단순 키워드 수집 (이전과 동일)
+                const keyword = row.dataset.keyword;
+                const checkboxes = row.querySelectorAll('input[type="checkbox"]:checked');
+                if (checkboxes.length === 0) {
+                    userExceptionRules.add(keyword);
+                } else {
+                    const finalContentInput = row.querySelector('.final-content-input');
+                    const categories = Array.from(checkboxes).map(cb => cb.dataset.category);
+                    userResolvedRules.push({
+                        original: keyword,
+                        category: categories.join('; '),
+                        final: finalContentInput.value
+                    });
+                }
+            } else if (itemType === 'group') {
+                // ▼▼▼ '모호한 그룹'에서 사용자의 선택을 수집하는 새로운 로직 ▼▼▼
+                row.querySelectorAll('div[data-keyword]').forEach(keywordDiv => {
+                    const keyword = keywordDiv.dataset.keyword;
+                    const selectedCategory = keywordDiv.querySelector('.category-select').value;
+                    const finalContentInput = keywordDiv.querySelector('.final-content-input');
+
+                    if (selectedCategory) {
+                        // 카테고리를 선택했다면 매핑 규칙으로 생성
+                        userResolvedRules.push({
+                            original: keyword,
+                            category: selectedCategory,
+                            final: finalContentInput.value
+                        });
+                    } else {
+                        // 카테고리를 선택하지 않았다면( "-- 예외로 처리 --" 상태) 예외로 처리
+                        userExceptionRules.add(keyword);
+                    }
+                });
+            }
+        });
+
+        const all_exceptions = [...(analysisResult.auto_exceptions || []), ...Array.from(userExceptionRules)];
+        
+        return {
+            mapping_rules: [...analysisResult.auto_resolved, ...userResolvedRules],
+            exception_rules: [...new Set(all_exceptions)].map(keyword => ({ '예외 처리할 주석 내용': keyword }))
+        };
+    }
+
+    nextBtn.addEventListener('click', async () => {
+        if (currentStep === 1) {
+            await analyzeAndGoToStep2();
+        } else if (currentStep === 2) {
+            const summaryText = document.getElementById('summary-text');
+            const autoCount = analysisResult.auto_resolved.length;
+            const userResolvedCount = new Set(Array.from(document.querySelectorAll('#review-table-body input:checked')).map(cb => cb.dataset.keywordIndex)).size;
+            summaryText.textContent = `총 ${autoCount}개의 규칙이 자동으로 분류되었고, ${userResolvedCount}개의 규칙을 수동으로 분류했습니다. 아래 버튼을 눌러 최종 규칙 파일을 생성하세요.`;
+            currentStep++;
+            updateWizard();
+        }
+    });
+
+    prevBtn.addEventListener('click', () => {
+        if (currentStep > 1) {
+            currentStep--;
+            updateWizard();
+        }
+    });
+
+    document.getElementById('rule-maker-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const finalRules = collectFinalRules();
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> 생성 중...';
+        setStatus('최종 규칙 파일을 생성하고 있습니다...', 'info');
+        
+        const formData = new FormData();
+        formData.append('final_rules', JSON.stringify(finalRules));
+        formData.append('outputFileName', document.getElementById('outputFileName').value || '주석_규칙_파일.xlsx');
+
+        try {
+            const response = await fetch('/run_comment_rule_making', { method: 'POST', body: formData });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || '서버 오류');
+            }
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = document.getElementById('outputFileName').value || '주석_규칙_파일.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            setStatus('✅ 완료! 파일이 다운로드되었습니다.', 'success');
+        } catch (err) {
+            setStatus(`❌ 오류: ${err.message}`, 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-cogs mr-2"></i> 규칙 파일 생성 시작';
+        }
+    });
+
+    updateWizard();
+</script>
+</body>
+</html>
+
